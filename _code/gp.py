@@ -201,9 +201,13 @@ class GaussianProcess:
 
     def gpr_optimize(self, task, x):
         def my_prediction(hyperparameters):
-            return self.gpr_make_prediction(hyperparameters, task, x)
+            lml = self.gpr_make_prediction(hyperparameters, task, x)
+            print lml
+            return lml
         def my_grad(hyperparameters):
-            return self.gradient_mlogML(task)
+            grad = self.gradient_mlogML(task)
+            print grad
+            return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
         return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad)
 
