@@ -178,6 +178,7 @@ class GaussianProcess:
         sigma_n = eps
         I = np.matrix(np.eye(self.n))
         y = self.Y[task]
+        self.K = self.cov_function.cov_matrix(hyperparameters, self.X)
         self.L = cholesky(self.K + sigma_n*I)
         L = self.L
         alpha = backslash(L.T, backslash(L, y))
@@ -189,15 +190,16 @@ class GaussianProcess:
         self.mlog_ML = 0.5*(np.dot(y.T, alpha)[0, 0] + sum(log(np.diag(L))))
         return self.mlog_ML
 
-    def der_mlogML(self, task, i):
+    def der_mlogML(self, hyperparameters, task, i):
+        self.K = self.cov_function.cov_matrix(hyperparameters, self.X)
         alpha = backslash(self.L.T, backslash(self.L, self.Y[task]))
         L_inv = inv(self.L)
         return -0.5*trace_of_prod(alpha*alpha.T - L_inv.T*L_inv, self.cov_function.pder_matrix(self.hyperparameters, i, self.X))
         # return -0.5*trace_of_prod(alpha*alpha.T - L_inv.T*L_inv, self.cov_function.pder_matrix())
         # return -0.5*trace_of_prod(alpha*alpha.T - )
 
-    def gradient_mlogML(self, task):
-        return np.array([self.der_mlogML(task, i) for i in range(len(self.hyperparameters))])
+    def gradient_mlogML(self, hyperparameters, task):
+        return np.array([self.der_mlogML(hyperparameters, task, i) for i in range(len(self.hyperparameters))])
 
     def gpr_optimize(self, task, x):
         def my_prediction(hyperparameters):
@@ -205,7 +207,7 @@ class GaussianProcess:
             print lml
             return lml
         def my_grad(hyperparameters):
-            grad = self.gradient_mlogML(task)
+            grad = self.gradient_mlogML(hyperparameters, task)
             print grad
             return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
