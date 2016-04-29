@@ -19,12 +19,12 @@ def compute_cov_matrix(cov_function, hyperparameters, X):
             K[j, i] = K[i, j]
     return K
 
-def compute_pder_matrix(pder_function, hyperparameters, i, X):
+def compute_pder_matrix(pder_function, hyperparameters, coord, X):
     n, D = num_cols(X), num_rows(X)
-    dK = np.matrix(np.zeros(n, n))
+    dK = np.matrix(np.zeros((n, n)))
     for i in range(n):
         for j in range(i+1):
-            dK[i, j] = pder_function(hyperparameters, i, X[:,i], X[:,j])
+            dK[i, j] = pder_function(hyperparameters, coord, X[:,i], X[:,j])
             dK[j, i] = dK[i, j]
     return dK
 

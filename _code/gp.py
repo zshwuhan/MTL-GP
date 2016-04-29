@@ -11,7 +11,7 @@ from Utilities import hyperparameters_SMK
 from numpy.linalg import cholesky, inv
 from scipy.optimize import fmin_l_bfgs_b as l_bfgs
 from scipy.optimize import fmin_cg
-eps = 0.0001
+eps = 0.001
 
 log, exp, cos, sin = np.log, np.exp, np.cos, np.sin
 
@@ -39,16 +39,20 @@ class CovFunction:
 
 class DotKernel(CovFunction):
     def __init__(self):
-        self.INITIAL_GUESS = [2.]
+        self.INITIAL_GUESS = [27.]
         def cov_function(hyperparameters, x, z):
             l = hyperparameters[0]
-            return log(l)*np.dot(x.T, z)[0, 0]
+            return log(l)*dot(x.T, z)
         self.cov_function = cov_function
+        def compute_pder(hyperparameters, i, x, z):
+            l = hyperparameters[0]
+            return dot(x.T, z)/l
+        self.compute_pder = compute_pder
 
 class SMKernel(CovFunction):
     def __init__(self, P, Q):
         self.P, self.Q = P, Q
-        self.INITIAL_GUESS = [1]*(1+2*P)*Q
+        self.INITIAL_GUESS = [2.3]*(1+2*P)*Q
         def cov_function(hyperparameters, x, z):
             # TODO:
             # Comprobar que el numero de hip. es correcto
@@ -127,7 +131,6 @@ class SMKernel(CovFunction):
                 return None
         self.compute_pder = compute_pder
 
-
 class SigmoidFunction:
     pass
 
@@ -194,16 +197,15 @@ class GaussianProcess:
         # return -0.5*trace_of_prod(alpha*alpha.T - )
 
     def gradient_mlogML(self, task):
-        return np.array([self.der_mlogML(task, i) for i in range(self.n)])
+        return np.array([self.der_mlogML(task, i) for i in range(len(self.hyperparameters))])
 
     def gpr_optimize(self, task, x):
         def my_prediction(hyperparameters):
             return self.gpr_make_prediction(hyperparameters, task, x)
-        def my_der(hyperparameters):
-            return self.der_mlogML(task)
+        def my_grad(hyperparameters):
+            return self.gradient_mlogML(task)
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, approx_grad=True)
-
+        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad)
 
     def gpc_find_mode(self, task):
         f = 0
