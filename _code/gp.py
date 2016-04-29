@@ -1,7 +1,7 @@
 import math
 import numpy as np
 
-from Utilities import compute_cov_matrix
+from Utilities import compute_cov_matrix, compute_pder_matrix
 from Utilities import backslash, hadamard_prod
 from Utilities import num_rows, num_cols
 from Utilities import compute_k_star
@@ -25,7 +25,9 @@ class CovFunction:
     def cov_matrix(self, hyperparameters, X):
         return compute_cov_matrix(self.cov_function, hyperparameters, X)
 
-    def pder_matrix(self, hyperparameters, coord, X):
+    def pder_matrix(self, hyperparameters, i, X):
+        return compute_pder_matrix(self.compute_pder, hyperparameters, i, X)
+        '''
         h1 = hyperparameters
         h2 = hyperparameters
         h1[coord] += eps
@@ -33,6 +35,7 @@ class CovFunction:
         num = self.cov_matrix(h1, X) - self.cov_matrix(h2, X)
         denom = 2*eps
         return num/denom
+        '''
 
 class DotKernel(CovFunction):
     def __init__(self):
@@ -183,12 +186,15 @@ class GaussianProcess:
         self.mlog_ML = 0.5*(np.dot(y.T, alpha)[0, 0] + sum(log(np.diag(L))))
         return self.mlog_ML
 
-    def der_mlogML(self, task):
+    def der_mlogML(self, task, i):
         alpha = backslash(self.L.T, backslash(self.L, self.Y[task]))
         L_inv = inv(self.L)
-        return 'ERR'
+        return -0.5*trace_of_prod(alpha*alpha.T - L_inv.T*L_inv, self.cov_function.pder_matrix(self.hyperparameters, i, self.X))
         # return -0.5*trace_of_prod(alpha*alpha.T - L_inv.T*L_inv, self.cov_function.pder_matrix())
         # return -0.5*trace_of_prod(alpha*alpha.T - )
+
+    def gradient_mlogML(self, task):
+        return np.array([self.der_mlogML(task, i) for i in range(self.n)])
 
     def gpr_optimize(self, task, x):
         def my_prediction(hyperparameters):
