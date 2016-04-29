@@ -6,7 +6,7 @@ from gp import SMKernel
 
 
 N_ROWS = 5
-N_COLS = 10
+N_COLS = 50
 
 X = np.matrix([(0.1*i)**j for j in range(N_ROWS) for i in range(1,N_COLS+1)]).reshape((N_ROWS,N_COLS))
 y1 = np.matrix([(0.2*i) + np.random.normal(0,0.01,1)[0] for i in range(1,N_COLS+1)]).T
