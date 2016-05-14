@@ -10,7 +10,6 @@ from Utilities import dot
 from Utilities import hyperparameters_SMK
 from numpy.linalg import cholesky, inv
 from scipy.optimize import fmin_l_bfgs_b as l_bfgs
-from scipy.optimize import fmin_cg
 eps = 0.001
 
 log, exp, cos, sin = np.log, np.exp, np.cos, np.sin
@@ -39,7 +38,7 @@ class CovFunction:
 
 class DotKernel(CovFunction):
     def __init__(self):
-        self.INITIAL_GUESS = [27.]
+        self.INITIAL_GUESS = [2.]
         def cov_function(hyperparameters, x, z):
             l = hyperparameters[0]
             return log(l)*dot(x.T, z)
@@ -140,7 +139,7 @@ class LogisticFunction(SigmoidFunction):
         # TODO:
         # Comprobar que y, f son del
         # mismo tamanio.
-        return [-log(1 + exp(-y[i,0]*f[i,0])) for i in range(n)]
+        return np.matrix([-log(1 + exp(-y[i,0]*f[i,0])) for i in range(n)]).T
 
     def der_log_likelihood(self, y, f):
         n = num_rows(y)
@@ -148,13 +147,17 @@ class LogisticFunction(SigmoidFunction):
         # Comprobar que y, f son del
         # mismo tamanio.
         # Tambien tratar y, f como matr.
-        pi = exp(-self.log_likelihood(y, f))
+        n = num_rows(y)
+        p = np.matrix([1/(1+exp(-f[i,0])) for i in range(n)]).T
         t = 0.5*(y + 1)
-        return t - pi
+        return t - p
 
     def der2_log_likelihood(self, y, f):
-        pi = exp(-self.log_likelihood(y, f))
-        return hadamard_prod(pi, 1-pi)
+        # pi = exp(-self.log_likelihood(y, f))
+        #return hadamard_prod(pi, 1-pi)
+        n = num_rows(y)
+        p = np.matrix([1/(1+exp(-f[i,0])) for i in range(n)]).T
+        return np.matrix(np.diag([]))
 
 class GaussianProcess:
     def __init__(self, cov_function, X):
@@ -211,7 +214,7 @@ class GaussianProcess:
             print grad
             return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad)
+        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=10)
 
     def gpc_find_mode(self, task):
         f = 0
