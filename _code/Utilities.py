@@ -71,7 +71,13 @@ def trace_of_prod(m1, m2):
 
 def compute_k_star(cov_function, hyperparameters, X, x):
     n = num_cols(X)
-    return np.matrix([cov_function(hyperparameters, X[:,i], x) for i in range(n)]).T
+    m = num_cols(x)
+    return np.concatenate(
+        [
+            np.matrix([cov_function(hyperparameters, X[:,i], x[:,j]) for i in range(n)]).T for j in range(m)
+        ], axis=1
+    )
+    # return np.matrix([cov_function(hyperparameters, X[:,i], x) for i in range(n)]).T
 
 def dot(x, z):
     result = np.dot(x, z)

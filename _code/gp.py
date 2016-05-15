@@ -188,7 +188,8 @@ class GaussianProcess:
         k_star = compute_k_star(self.cov_function.cov_function, hyperparameters, self.X, x)
         self.mean = np.dot(k_star.T, alpha)
         v = backslash(L, k_star)
-        k_star_star = self.cov_function.cov_function(hyperparameters, x, x)
+        # k_star_star = self.cov_function.cov_function(hyperparameters, x, x)
+        k_star_star = compute_k_star(self.cov_function.cov_function, hyperparameters, x, x)
         self.variance = k_star_star - np.dot(v.T, v)
         self.mlog_ML = 0.5*(np.dot(y.T, alpha)[0, 0] + sum(log(np.diag(L))))
         return self.mlog_ML
@@ -214,7 +215,7 @@ class GaussianProcess:
             print grad
             return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=10)
+        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=20)
 
     def gpc_find_mode(self, task):
         f = 0
