@@ -10,7 +10,7 @@ from Utilities import dot
 from Utilities import hyperparameters_SMK
 from numpy.linalg import cholesky, inv
 from scipy.optimize import fmin_l_bfgs_b as l_bfgs
-eps = 0.001
+eps = 0.01
 
 log, exp, cos, sin = np.log, np.exp, np.cos, np.sin
 
@@ -141,7 +141,7 @@ class LogisticFunction(SigmoidFunction):
         # mismo tamanio.
         return np.matrix([-log(1 + exp(-y[i,0]*f[i,0])) for i in range(n)]).T
 
-    def der_log_likelihood(self, y, f):
+    def gradient_log_likelihood(self, y, f):
         n = num_rows(y)
         # TODO:
         # Comprobar que y, f son del
@@ -152,12 +152,12 @@ class LogisticFunction(SigmoidFunction):
         t = 0.5*(y + 1)
         return t - p
 
-    def der2_log_likelihood(self, y, f):
+    def hessian_log_likelihood(self, y, f):
         # pi = exp(-self.log_likelihood(y, f))
         #return hadamard_prod(pi, 1-pi)
         n = num_rows(y)
         p = np.matrix([1/(1+exp(-f[i,0])) for i in range(n)]).T
-        return np.matrix(np.diag([]))
+        return np.matrix(np.diag([-p[i,0]*(1-p[i,0]) for i in range(n)]))
 
 class GaussianProcess:
     def __init__(self, cov_function, X):
@@ -176,6 +176,12 @@ class GaussianProcess:
     def add_task(self, y):
         self.Y.append(y)
         self.num_tasks += 1
+
+    def gpr_normalize(self):
+        for task in range(len(self.Y)):
+            y = self.Y[task]
+            mean, std = np.mean(y), np.mean(y)
+            self.Y[task] = (y - mean)/std
 
     def gpr_make_prediction(self, hyperparameters, task, x):
         sigma_n = eps
@@ -215,39 +221,44 @@ class GaussianProcess:
             print grad
             return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=20)
+        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=10)
 
     def gpc_find_mode(self, task):
-        f = 0
         I = np.matrix(np.eye(self.n))
+        f_old = 0
+        f = 0
+        y = self.Y[task]
         # TODO:
         # Cambiar la condicion
-        # (logicamente)
+        # (logicamente)a
         while True:
-            W = None #TODO: Ciertamente definir W
+            W = self.sigmoid.hessian_log_likelihood(y, f)
             K = self.K
             sqrt_W = np.sqrt(W)
             L = cholesky(I + sqrt_W*K*sqrt_W)
-            b = W*f + 0 # TODO: Completar
+            b = W*f + self.sigmoid.gradient_log_likelihood(y, f)
             a = b - sqrt_W*backslash(L.T, backslash(L, sqrt_W*K*b))
             f = K*a
-            # TODO:
-            # Comprobar aqui la convergencia?
+            if f != f_old and abs(f-f_old) < 0.01:
+                break
         # TODO: Tambien se devuelve el logML
-        return f
+        log_ML = -0.5*dot(a.T, f) + self.sigmoid.log_likelihood(y, f) - sum(np.diag(np.log(L)))
+        return f, log_ML
 
-    def gpc_make_prediction(self):
+    def gpc_make_prediction(self, task, f_mode, x_star):
+        y, f = self.Y[task], f_mode
         I = np.matrix(np.eye(self.n))
-        W = None #TODO: Ciertamente definir W
+        W = - self.sigmoid.gradient_log_likelihood(y, f)
         K = self.K
         sqrt_W = np.sqrt(W)
         L = cholesky(I + sqrt_W*K*sqrt_W)
-        k_star = None # TODO: Definir esto como matriz fila
-        f_mean = None # TODO: Definir bien esto
+        k_star = compute_k_star(self.cov_function, self.hyperparameters, self.X, x_star)
+        f_mean = dot(k_star, self.sigmoid.gradient_log_likelihood(y, f))
         v = backslash(L, sqrt_W*k_star)
-        k_star_star = None # TODO: Definir bien esto
+        k_star_star = compute_k_star(self.cov_function.cov_function, self.hyperparameters, x_star, x_star)
         f_var = k_star_star - np.dot(v.T, v)
-        pi_star = None # TODO: Acabamos con esto. Bieeeeen
+        pi_star = None # TODO: Definir bien esto
+        return pi_star
 
     def gpc_optimize(self):
         # TODO: Implementar esta mierda
