@@ -1,6 +1,6 @@
 import math
 import numpy as np
-
+import scipy.stats
 from Utilities import compute_cov_matrix, compute_pder_matrix
 from Utilities import backslash, hadamard_prod
 from Utilities import num_rows, num_cols
@@ -8,8 +8,9 @@ from Utilities import compute_k_star
 from Utilities import trace_of_prod
 from Utilities import dot
 from Utilities import hyperparameters_SMK
-from numpy.linalg import cholesky, inv
+from numpy.linalg import cholesky, inv, norm
 from scipy.optimize import fmin_l_bfgs_b as l_bfgs
+from scipy.integrate import quad as integrate
 eps = 0.01
 
 log, exp, cos, sin = np.log, np.exp, np.cos, np.sin
@@ -134,12 +135,19 @@ class SigmoidFunction:
     pass
 
 class LogisticFunction(SigmoidFunction):
+    def evaluate(self, z):
+        return 1./(1 + exp(-z))
+
     def log_likelihood(self, y, f):
         n = num_rows(y)
         # TODO:
         # Comprobar que y, f son del
         # mismo tamanio.
-        return np.matrix([-log(1 + exp(-y[i,0]*f[i,0])) for i in range(n)]).T
+        # return np.matrix([-log(1 + exp(-y[i,0]*f[i,0])) for i in range(n)]).T
+        sum = 0
+        for i in range(n):
+            sum -= log(1 + exp(-y[i,0]*f[i, 0]))
+        return sum
 
     def gradient_log_likelihood(self, y, f):
         n = num_rows(y)
@@ -156,8 +164,8 @@ class LogisticFunction(SigmoidFunction):
         # pi = exp(-self.log_likelihood(y, f))
         #return hadamard_prod(pi, 1-pi)
         n = num_rows(y)
-        p = np.matrix([1/(1+exp(-f[i,0])) for i in range(n)]).T
-        return np.matrix(np.diag([-p[i,0]*(1-p[i,0]) for i in range(n)]))
+        p = np.matrix([1./(1+exp(-f[i,0])) for i in range(n)]).T
+        return np.matrix(np.diag([p[i,0]*(1-p[i,0]) for i in range(n)]))
 
 class GaussianProcess:
     def __init__(self, cov_function, X):
@@ -225,13 +233,14 @@ class GaussianProcess:
 
     def gpc_find_mode(self, task):
         I = np.matrix(np.eye(self.n))
-        f_old = 0
-        f = 0
         y = self.Y[task]
+        f = np.matrix([0]*self.n).T
+
         # TODO:
         # Cambiar la condicion
         # (logicamente)a
         while True:
+            f_old = np.copy(f)
             W = self.sigmoid.hessian_log_likelihood(y, f)
             K = self.K
             sqrt_W = np.sqrt(W)
@@ -239,25 +248,36 @@ class GaussianProcess:
             b = W*f + self.sigmoid.gradient_log_likelihood(y, f)
             a = b - sqrt_W*backslash(L.T, backslash(L, sqrt_W*K*b))
             f = K*a
-            if f != f_old and abs(f-f_old) < 0.01:
+            if norm(f-f_old) < 0.01:
                 break
-        # TODO: Tambien se devuelve el logML
-        log_ML = -0.5*dot(a.T, f) + self.sigmoid.log_likelihood(y, f) - sum(np.diag(np.log(L)))
+        log_ML = -0.5*dot(a.T, f) + self.sigmoid.log_likelihood(y, f) - sum(log(np.diag(L)))
         return f, log_ML
 
     def gpc_make_prediction(self, task, f_mode, x_star):
         y, f = self.Y[task], f_mode
         I = np.matrix(np.eye(self.n))
-        W = - self.sigmoid.gradient_log_likelihood(y, f)
-        K = self.K
+        # TODO:
+        # Corregir esto
+        W = self.sigmoid.hessian_log_likelihood(y, f)
+        K = self.K + eps*I
         sqrt_W = np.sqrt(W)
         L = cholesky(I + sqrt_W*K*sqrt_W)
-        k_star = compute_k_star(self.cov_function, self.hyperparameters, self.X, x_star)
-        f_mean = dot(k_star, self.sigmoid.gradient_log_likelihood(y, f))
+        k_star = compute_k_star(self.cov_function.cov_function, self.hyperparameters, self.X, x_star)
+        f_mean = dot(k_star.T, self.sigmoid.gradient_log_likelihood(y, f))
         v = backslash(L, sqrt_W*k_star)
         k_star_star = compute_k_star(self.cov_function.cov_function, self.hyperparameters, x_star, x_star)
         f_var = k_star_star - np.dot(v.T, v)
-        pi_star = None # TODO: Definir bien esto
+        # TODO:
+        # Cambiar esto para problemas multidimensionales
+        f_var = f_var[0, 0]
+
+        # TODO:
+        # esto se puede hacer mejor
+        def aux_fun(z):
+            return self.sigmoid.evaluate(z)*scipy.stats.norm(f_mean, f_var).pdf(z)
+
+        # pi_star = integrate(aux_fun, -np.inf, np.inf)
+        pi_star = integrate(aux_fun, -5, 5)
         return pi_star
 
     def gpc_optimize(self):
