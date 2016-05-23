@@ -174,7 +174,7 @@ class LogisticFunction(SigmoidFunction):
         #return hadamard_prod(pi, 1-pi)
         n = num_rows(y)
         p = np.matrix([1./(1+exp(-f[i,0])) for i in range(n)]).T
-        return np.matrix(np.diag([p[i,0]*(1-p[i,0]) for i in range(n)]))
+        return np.matrix(np.diag([-p[i,0]*(1-p[i,0]) for i in range(n)]))
 
 class GaussianProcess:
     def __init__(self, cov_function, X):
@@ -250,7 +250,7 @@ class GaussianProcess:
         # (logicamente)a
         while True:
             f_old = np.copy(f)
-            W = self.sigmoid.hessian_log_likelihood(y, f)
+            W = - self.sigmoid.hessian_log_likelihood(y, f)
             K = self.K
             sqrt_W = np.sqrt(W)
             L = cholesky(I + sqrt_W*K*sqrt_W)
@@ -267,7 +267,7 @@ class GaussianProcess:
         I = np.matrix(np.eye(self.n))
         # TODO:
         # Corregir esto
-        W = self.sigmoid.hessian_log_likelihood(y, f)
+        W = - self.sigmoid.hessian_log_likelihood(y, f)
         K = self.K + eps*I
         sqrt_W = np.sqrt(W)
         L = cholesky(I + sqrt_W*K*sqrt_W)
