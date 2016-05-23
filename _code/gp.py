@@ -37,6 +37,15 @@ class CovFunction:
         return num/denom
         '''
 
+class SEKernel(CovFunction):
+    def __init__(self):
+        self.INITIAL_GUESS = [2.6, 7.0]
+        def cov_function(hyperparameters, x, z):
+            sigma, l = hyperparameters[0], hyperparameters[1]
+            tao = x - z
+            return (sigma**2)*(exp(-dot(tao.T, tao))/2*l*l)
+        self.cov_function = cov_function
+
 class DotKernel(CovFunction):
     def __init__(self):
         self.INITIAL_GUESS = [2.]
@@ -277,9 +286,18 @@ class GaussianProcess:
             return self.sigmoid.evaluate(z)*scipy.stats.norm(f_mean, f_var).pdf(z)
 
         # pi_star = integrate(aux_fun, -np.inf, np.inf)
-        pi_star = integrate(aux_fun, -5, 5)
-        return pi_star
+        self.pi_star = integrate(aux_fun, -5, 5)
+        return self.pi_star
 
-    def gpc_optimize(self):
-        # TODO: Implementar esta mierda
-        pass
+    def gpc_optimize(self, task, x):
+        def my_prediction(hyperparameters):
+            lml = f_mode = self.gpc_find_mode(task)[1]
+            # lml = self.gpc_make_prediction(task, f_mode, x)
+            print lml
+            return lml
+        def my_grad(hyperparameters):
+            grad = self.gradient_mlogML(hyperparameters, task)
+            print grad
+            return grad
+        # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
+        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=10)

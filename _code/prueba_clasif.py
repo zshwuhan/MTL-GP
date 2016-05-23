@@ -1,6 +1,6 @@
 import scipy.io
 import numpy as np
-from gp import GaussianProcess, SMKernel, DotKernel
+from gp import GaussianProcess, SMKernel, DotKernel, SEKernel
 from gp import LogisticFunction
 from numpy.random import normal as dnorm
 
@@ -17,11 +17,12 @@ y = np.matrix(
 ).T
 
 # my_GP = GaussianProcess(DotKernel(), X)
-my_GP = GaussianProcess(SMKernel(X.shape[0], 3), X)
+# my_GP = GaussianProcess(SMKernel(X.shape[0], 3), X)
+my_GP = GaussianProcess(SEKernel(), X)
 my_GP.add_task(y)
 my_GP.sigmoid = LogisticFunction()
 
-x_star = np.matrix(3)
+x_star = np.matrix(-3)
 f_mode, log_ML = my_GP.gpc_find_mode(0)
 print my_GP.gpc_make_prediction(0, f_mode, x_star)
 
