@@ -95,6 +95,11 @@ def hyperparameters_SMK(P, Q, hyperparameters):
         v[q] = hyperparameters[Q*(1+P)+q*P:Q*(1+P)+(q+1)*P]
     return w, mu, v
 
+def normalize(v):
+    # TODO: Comprobar que es un vector fila
+    mean, std = np.mean(v), np.std(v)
+    return (v - mean)/std
+
 '''
 def compute_k_star_star(cov_function, hyperparameters, x, z):
     n = num_rows(X)

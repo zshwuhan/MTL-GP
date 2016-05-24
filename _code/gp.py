@@ -11,7 +11,7 @@ from Utilities import hyperparameters_SMK
 from numpy.linalg import cholesky, inv, norm
 from scipy.optimize import fmin_l_bfgs_b as l_bfgs
 from scipy.integrate import quad as integrate
-eps = 0.01
+eps = 0.1
 
 log, exp, cos, sin = np.log, np.exp, np.cos, np.sin
 
@@ -45,6 +45,18 @@ class SEKernel(CovFunction):
             tao = x - z
             return (sigma**2)*(exp(-dot(tao.T, tao))/2*l*l)
         self.cov_function = cov_function
+        def compute_pder(hyperparameters, i, x, z):
+            sigma, l = hyperparameters[0], hyperparameters[1]
+            tao = x - z
+            if i==0:
+                return 2*sigma**(exp(-dot(tao.T, tao))/2*l*l)
+            elif i==1:
+                return (1./l**3)*(sigma**2)*(exp(-dot(tao.T, tao))/2*l*l)
+            else:
+                #TODO: controlar error
+                print 'error'
+                return None
+        self.compute_pder = compute_pder
 
 class DotKernel(CovFunction):
     def __init__(self):
@@ -197,15 +209,18 @@ class GaussianProcess:
     def gpr_normalize(self):
         for task in range(len(self.Y)):
             y = self.Y[task]
-            mean, std = np.mean(y), np.mean(y)
+            mean, std = np.mean(y), np.std(y)
             self.Y[task] = (y - mean)/std
+        return self.Y
 
     def gpr_make_prediction(self, hyperparameters, task, x):
         sigma_n = eps
         I = np.matrix(np.eye(self.n))
         y = self.Y[task]
-        self.K = self.cov_function.cov_matrix(hyperparameters, self.X)
-        self.L = cholesky(self.K + sigma_n*I)
+        # self.K = self.cov_function.cov_matrix(hyperparameters, self.X)
+        K = self.cov_function.cov_matrix(hyperparameters, self.X)
+        self.L = cholesky(K + sigma_n*I)
+        del K
         L = self.L
         alpha = backslash(L.T, backslash(L, y))
         k_star = compute_k_star(self.cov_function.cov_function, hyperparameters, self.X, x)
@@ -218,7 +233,7 @@ class GaussianProcess:
         return self.mlog_ML
 
     def der_mlogML(self, hyperparameters, task, i):
-        self.K = self.cov_function.cov_matrix(hyperparameters, self.X)
+        # self.K = self.cov_function.cov_matrix(hyperparameters, self.X)
         alpha = backslash(self.L.T, backslash(self.L, self.Y[task]))
         L_inv = inv(self.L)
         return -0.5*trace_of_prod(alpha*alpha.T - L_inv.T*L_inv, self.cov_function.pder_matrix(self.hyperparameters, i, self.X))
@@ -238,7 +253,7 @@ class GaussianProcess:
             print grad
             return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=10)
+        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=20)
 
     def gpc_find_mode(self, task):
         I = np.matrix(np.eye(self.n))
