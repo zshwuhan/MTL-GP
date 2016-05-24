@@ -194,7 +194,7 @@ class GaussianProcess:
         self.X = X
         self.n, self.D = num_cols(X), num_rows(X)
         self.num_tasks = 0
-        self.Y = []
+        self.Y = None
 
         self.hyperparameters =  cov_function.INITIAL_GUESS
         self.K = cov_function.cov_matrix(self.hyperparameters, X)
@@ -203,7 +203,10 @@ class GaussianProcess:
         # Matriz de covarianza
 
     def add_task(self, y):
-        self.Y.append(y)
+        if self.num_tasks == 0:
+            self.Y = y
+        else:
+            self.Y = np.concatenate((self.Y, y), axis=1)
         self.num_tasks += 1
 
     def gpr_normalize(self):
@@ -213,10 +216,10 @@ class GaussianProcess:
             self.Y[task] = (y - mean)/std
         return self.Y
 
-    def gpr_make_prediction(self, hyperparameters, task, x):
+    def gpr_make_prediction(self, hyperparameters, tasks, x):
         sigma_n = eps
         I = np.matrix(np.eye(self.n))
-        y = self.Y[task]
+        y = self.Y[:, tasks]
         # self.K = self.cov_function.cov_matrix(hyperparameters, self.X)
         K = self.cov_function.cov_matrix(hyperparameters, self.X)
         self.L = cholesky(K + sigma_n*I)
@@ -229,31 +232,34 @@ class GaussianProcess:
         # k_star_star = self.cov_function.cov_function(hyperparameters, x, x)
         k_star_star = compute_k_star(self.cov_function.cov_function, hyperparameters, x, x)
         self.variance = k_star_star - np.dot(v.T, v)
-        self.mlog_ML = 0.5*(np.dot(y.T, alpha)[0, 0] + sum(log(np.diag(L))))
+        self.mlog_ML = 0
+        for task in tasks:
+            self.mlog_ML += 0.5*(np.dot(y[:, task].T, alpha)[0, 0] + sum(log(np.diag(L))))
         return self.mlog_ML
 
-    def der_mlogML(self, hyperparameters, task, i):
-        # self.K = self.cov_function.cov_matrix(hyperparameters, self.X)
-        alpha = backslash(self.L.T, backslash(self.L, self.Y[task]))
+    def der_mlogML(self, hyperparameters, tasks, i):
+        der = 0
         L_inv = inv(self.L)
-        return -0.5*trace_of_prod(alpha*alpha.T - L_inv.T*L_inv, self.cov_function.pder_matrix(self.hyperparameters, i, self.X))
-        # return -0.5*trace_of_prod(alpha*alpha.T - L_inv.T*L_inv, self.cov_function.pder_matrix())
-        # return -0.5*trace_of_prod(alpha*alpha.T - )
+        for task in tasks:
+            alpha = backslash(self.L.T, backslash(self.L, self.Y[:, task]))
+            der -= 0.5*trace_of_prod(alpha*alpha.T - L_inv.T*L_inv, self.cov_function.pder_matrix(self.hyperparameters, i, self.X))
+        return der
 
     def gradient_mlogML(self, hyperparameters, task):
         return np.array([self.der_mlogML(hyperparameters, task, i) for i in range(len(self.hyperparameters))])
 
-    def gpr_optimize(self, task, x):
+    def gpr_optimize(self, tasks, x):
         def my_prediction(hyperparameters):
-            lml = self.gpr_make_prediction(hyperparameters, task, x)
+            lml = self.gpr_make_prediction(hyperparameters, tasks, x)
             print lml
             return lml
         def my_grad(hyperparameters):
-            grad = self.gradient_mlogML(hyperparameters, task)
+            grad = self.gradient_mlogML(hyperparameters, tasks)
             print grad
             return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=20)
+        self.hyperparameters = l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=20)
+        return self.hyperparameters
 
     def gpc_find_mode(self, task):
         I = np.matrix(np.eye(self.n))
