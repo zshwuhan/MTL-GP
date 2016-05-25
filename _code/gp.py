@@ -234,7 +234,7 @@ class GaussianProcess:
         self.variance = k_star_star - np.dot(v.T, v)
         self.mlog_ML = 0
         for task in tasks:
-            self.mlog_ML += 0.5*(np.dot(y[:, task].T, alpha)[0, 0] + sum(log(np.diag(L))))
+            self.mlog_ML += 0.5*(np.dot(y[:, task].T, alpha[:,task]) + sum(log(np.diag(L))))
         return self.mlog_ML
 
     def der_mlogML(self, hyperparameters, tasks, i):
