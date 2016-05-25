@@ -54,7 +54,7 @@ class SEKernel(CovFunction):
                 return (1./l**3)*(sigma**2)*(exp(-dot(tao.T, tao))/2*l*l)
             else:
                 #TODO: controlar error
-                print 'error'
+                # print 'error'
                 return None
         self.compute_pder = compute_pder
 
@@ -148,7 +148,7 @@ class SMKernel(CovFunction):
                 return prod
             else:
                 # TODO: Implementar esto
-                print 'Sin implementar (oops)'
+                # print 'Sin implementar (oops)'
                 return None
         self.compute_pder = compute_pder
 
@@ -251,14 +251,14 @@ class GaussianProcess:
     def gpr_optimize(self, tasks, x):
         def my_prediction(hyperparameters):
             lml = self.gpr_make_prediction(hyperparameters, tasks, x)
-            print lml
+            # print lml
             return lml
         def my_grad(hyperparameters):
             grad = self.gradient_mlogML(hyperparameters, tasks)
-            print grad
+            # print grad
             return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        self.hyperparameters = l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=20)
+        self.hyperparameters = l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=10)
         return self.hyperparameters
 
     def gpc_find_mode(self, task):
@@ -266,9 +266,6 @@ class GaussianProcess:
         y = self.Y[task]
         f = np.matrix([0]*self.n).T
 
-        # TODO:
-        # Cambiar la condicion
-        # (logicamente)a
         while True:
             f_old = np.copy(f)
             W = - self.sigmoid.hessian_log_likelihood(y, f)
@@ -286,9 +283,7 @@ class GaussianProcess:
     def gpc_make_prediction(self, task, f_mode, x_star):
         y, f = self.Y[task], f_mode
         I = np.matrix(np.eye(self.n))
-        # TODO:
-        # Corregir esto
-        W = - self.sigmoid.hessian_log_likelihood(y, f)
+        W = -self.sigmoid.hessian_log_likelihood(y, f)
         K = self.K + eps*I
         sqrt_W = np.sqrt(W)
         L = cholesky(I + sqrt_W*K*sqrt_W)
@@ -314,11 +309,11 @@ class GaussianProcess:
         def my_prediction(hyperparameters):
             lml = f_mode = self.gpc_find_mode(task)[1]
             # lml = self.gpc_make_prediction(task, f_mode, x)
-            print lml
+            # print lml
             return lml
         def my_grad(hyperparameters):
             grad = self.gradient_mlogML(hyperparameters, task)
-            print grad
+            # print grad
             return grad
         # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=10)
+        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=1)

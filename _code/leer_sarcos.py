@@ -9,12 +9,12 @@ train = np.matrix(scipy.io.loadmat("/home/victor/Documents/MTL-GP/_data/sarcos_i
 # Inputs  (7 joint positions, 7 joint velocities, 7 joint accelerations)
 Xtrain = train[:100, :21].T
 # Outputs (7 joint torques)
-Ytrain = normalize(train[:100, 21:23])
+Ytrain = normalize(train[:100, 21:23])[0]
 
 # Load test set
 test = np.matrix(scipy.io.loadmat("/home/victor/Documents/MTL-GP/_data/sarcos_inv_test.mat")["sarcos_inv_test"])
 Xtest = test[:100, :21].T
-Ytest = normalize(test[:100, 21:23])
+Ytest = normalize(test[:100, 21:23])[0]
 
 # my_GP = GaussianProcess(SMKernel(Xtrain.shape[0], 3), Xtrain)
 # my_GP = GaussianProcess(DotKernel(), Xtrain)

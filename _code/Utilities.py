@@ -95,10 +95,48 @@ def hyperparameters_SMK(P, Q, hyperparameters):
         v[q] = hyperparameters[Q*(1+P)+q*P:Q*(1+P)+(q+1)*P]
     return w, mu, v
 
-def normalize(v):
-    # TODO: Comprobar que es un vector fila
-    mean, std = np.mean(v), np.std(v)
-    return (v - mean)/std
+def normalize(M, means=None, stds=None):
+    if type(M) is not np.matrix:
+        print 'error'
+        exit(0)
+    if means is None or stds is None:
+        means, stds = [], []
+        for i in range(num_rows(M)):
+            v = M[i,:]
+            mean, std = np.mean(v), np.std(v)
+            means.append(mean); stds.append(std);
+            M[i,:] = (v - mean)/std
+    elif means is not None and stds is not None:
+        for i in range(num_rows(M)):
+            v = M[i,:]
+            mean, std = means[i], stds[i]
+            M[i,:] = (v - mean)/std
+    else:
+        print 'ERRORCIN'
+        exit(0)
+    return M, means, stds
+
+def center(M, means=None):
+    if type(M) is not np.matrix:
+        print 'error'
+        exit(0)
+    if means is None:
+        means = []
+        for i in range(num_cols(M)):
+            v = M[:,i]
+            mean = np.mean(v)
+            means.append(mean)
+            M[:,i] = v - mean
+    else:
+        for i in range(num_cols(M)):
+            v = M[:,i]
+            mean = means[i]
+            M[:,i] = v - mean
+    return M, means
+
+def mean_squared_error(predictions, targets):
+    tao = predictions - targets
+    return dot(tao.T, tao)/num_rows(tao)
 
 '''
 def compute_k_star_star(cov_function, hyperparameters, x, z):
