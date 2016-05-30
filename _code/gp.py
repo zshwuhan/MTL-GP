@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import scipy.stats
+
 from Utilities import compute_cov_matrix, compute_pder_matrix
 from Utilities import backslash, hadamard_prod
 from Utilities import num_rows, num_cols
@@ -11,8 +12,8 @@ from Utilities import hyperparameters_SMK
 from numpy.linalg import cholesky, inv, norm
 from scipy.optimize import fmin_l_bfgs_b as l_bfgs
 from scipy.integrate import quad as integrate
-eps = 0.1
 
+eps = 0.1
 log, exp, cos, sin = np.log, np.exp, np.cos, np.sin
 
 TWOPI = 2*math.pi
@@ -39,7 +40,7 @@ class CovFunction:
 
 class SEKernel(CovFunction):
     def __init__(self):
-        self.INITIAL_GUESS = [2.6, 7.0]
+        self.INITIAL_GUESS = [log(2.6), log(7.0)]
         def cov_function(hyperparameters, x, z):
             sigma, l = hyperparameters[0], hyperparameters[1]
             tao = x - z
@@ -73,7 +74,7 @@ class DotKernel(CovFunction):
 class SMKernel(CovFunction):
     def __init__(self, P, Q):
         self.P, self.Q = P, Q
-        self.INITIAL_GUESS = [2.3]*(1+2*P)*Q
+        self.INITIAL_GUESS = [0.1]*(1+2*P)*Q
         def cov_function(hyperparameters, x, z):
             # TODO:
             # Comprobar que el numero de hip. es correcto
@@ -157,6 +158,8 @@ class SigmoidFunction:
 
 class LogisticFunction(SigmoidFunction):
     def evaluate(self, z):
+        # if type(z) == tuple:
+        #     z = np.array(z)
         return 1./(1 + exp(-z))
 
     def log_likelihood(self, y, f):
@@ -182,11 +185,14 @@ class LogisticFunction(SigmoidFunction):
         return t - p
 
     def hessian_log_likelihood(self, y, f):
-        # pi = exp(-self.log_likelihood(y, f))
-        #return hadamard_prod(pi, 1-pi)
         n = num_rows(y)
         p = np.matrix([1./(1+exp(-f[i,0])) for i in range(n)]).T
         return np.matrix(np.diag([-p[i,0]*(1-p[i,0]) for i in range(n)]))
+
+    def der3_log_likelihood(self, y, f):
+        n = num_rows(y)
+        p = np.matrix([1./(1+exp(-f[i,0])) for i in range(n)]).T
+        return np.matrix([p[i,0]*(1-p[i,0])*(2*p[i,0]-1) for i in range(n)]).T
 
 class GaussianProcess:
     def __init__(self, cov_function, X):
@@ -261,15 +267,16 @@ class GaussianProcess:
         self.hyperparameters = l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=10)
         return self.hyperparameters
 
-    def gpc_find_mode(self, task):
+    def gpc_find_mode(self, tasks, hyperparameters):
         I = np.matrix(np.eye(self.n))
-        y = self.Y[task]
-        f = np.matrix([0]*self.n).T
+        y = self.Y[:,tasks]
+        num_tasks = len(tasks)
+        f = np.matrix([0]*self.n*num_tasks).reshape((self.n, num_tasks))
 
         while True:
             f_old = np.copy(f)
-            W = - self.sigmoid.hessian_log_likelihood(y, f)
-            K = self.K
+            W = -self.sigmoid.hessian_log_likelihood(y, f)
+            K = self.cov_function.cov_matrix(hyperparameters, self.X)
             sqrt_W = np.sqrt(W)
             L = cholesky(I + sqrt_W*K*sqrt_W)
             b = W*f + self.sigmoid.gradient_log_likelihood(y, f)
@@ -277,43 +284,65 @@ class GaussianProcess:
             f = K*a
             if norm(f-f_old) < 0.01:
                 break
-        log_ML = -0.5*dot(a.T, f) + self.sigmoid.log_likelihood(y, f) - sum(log(np.diag(L)))
-        return f, log_ML
+        self.mlog_ML = 0.5*dot(a.T, f) - self.sigmoid.log_likelihood(y, f) + sum(log(np.diag(L)))
+        self.f, self.a, self.sqrt_W, self.K, self.I = f, a, sqrt_W, K, I
+        return f, self.mlog_ML
 
-    def gpc_make_prediction(self, task, f_mode, x_star):
-        y, f = self.Y[task], f_mode
+    def gpc_gradient_mlogML(self, hyperparameters, tasks):
+        f, a, sqrt_W, K, I = self.f, self.a, self.sqrt_W, self.K, self.I
+        y = self.Y[:,tasks]
+        self.L = cholesky(I + sqrt_W*K*sqrt_W)
+        L = self.L
+        R = sqrt_W*backslash(L.T, backslash(L, sqrt_W))
+        C = backslash(L, sqrt_W*K)
+        s2 = np.matrix(np.diag(np.diag(K) - np.diag(C.T*C)))*self.sigmoid.der3_log_likelihood(y, f)
+        num_hyper = len(hyperparameters)
+        gradient = []
+        for j in range(num_hyper):
+            # C = np.array([self.der_mlogML(hyperparameters, tasks, i) for i in range(len(self.hyperparameters))])
+            C = self.cov_function.pder_matrix(hyperparameters, j, self.X)
+            s1 = 0.5*(a.T*C*a - trace_of_prod(R, C))[0, 0]
+            b = C*self.sigmoid.gradient_log_likelihood(y, f)
+            s3 = b - K*R*b
+            # gradient.append(-s1 -s2.T*s3)
+            gradient.append(-s1 -dot(s2.T,s3))
+        return np.array(gradient)
+
+    def gpc_make_prediction(self, tasks, f_mode, x_star):
+        y, f = self.Y[:,tasks], f_mode
+        num_tasks = len(tasks)
         I = np.matrix(np.eye(self.n))
         W = -self.sigmoid.hessian_log_likelihood(y, f)
+        self.K = self.cov_function.cov_matrix(self.hyperparameters, self.X)
         K = self.K + eps*I
         sqrt_W = np.sqrt(W)
-        L = cholesky(I + sqrt_W*K*sqrt_W)
+        self.L = cholesky(I + sqrt_W*K*sqrt_W)
+        L = self.L
         k_star = compute_k_star(self.cov_function.cov_function, self.hyperparameters, self.X, x_star)
-        f_mean = dot(k_star.T, self.sigmoid.gradient_log_likelihood(y, f))
+        # f_mean = dot(k_star.T, self.sigmoid.gradient_log_likelihood(y, f))
+        f_mean = (k_star.T)*(self.sigmoid.gradient_log_likelihood(y, f))
         v = backslash(L, sqrt_W*k_star)
         k_star_star = compute_k_star(self.cov_function.cov_function, self.hyperparameters, x_star, x_star)
         f_var = k_star_star - np.dot(v.T, v)
-        # TODO:
-        # Cambiar esto para problemas multidimensionales
-        f_var = f_var[0, 0]
 
         # TODO:
         # esto se puede hacer mejor
-        def aux_fun(z):
-            return self.sigmoid.evaluate(z)*scipy.stats.norm(f_mean, f_var).pdf(z)
+        def aux_fun(z, i):
+            return self.sigmoid.evaluate(z)*scipy.stats.norm(f_mean[i,0], f_var[i,i]).pdf(z)
 
         # pi_star = integrate(aux_fun, -np.inf, np.inf)
-        self.pi_star = integrate(aux_fun, -5, 5)
+        self.pi_star = []
+        for i in range(num_cols(x_star)):
+            self.pi_star.append(integrate(aux_fun, -np.inf, np.inf, args=(i,))[0])
         return self.pi_star
 
-    def gpc_optimize(self, task, x):
+    def gpc_optimize(self, tasks):
         def my_prediction(hyperparameters):
-            lml = f_mode = self.gpc_find_mode(task)[1]
-            # lml = self.gpc_make_prediction(task, f_mode, x)
-            # print lml
-            return lml
+            mlml = self.gpc_find_mode(tasks, hyperparameters)[1]
+            print mlml
+            return mlml
         def my_grad(hyperparameters):
-            grad = self.gradient_mlogML(hyperparameters, task)
+            grad = self.gpc_gradient_mlogML(hyperparameters, tasks)
             # print grad
             return grad
-        # return fmin_cg(my_prediction, self.cov_function.INITIAL_GUESS)
-        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=1)
+        return l_bfgs(my_prediction, self.cov_function.INITIAL_GUESS, fprime=my_grad, maxfun=40)
