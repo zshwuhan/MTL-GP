@@ -40,19 +40,22 @@ class CovFunction:
 
 class SEKernel(CovFunction):
     def __init__(self):
-        self.INITIAL_GUESS = [log(2.6), log(7.0)]
+        # self.INITIAL_GUESS = [log(2.6), log(7.0)]
+        # self.INITIAL_GUESS = [9.1, 9.1]
+        self.INITIAL_GUESS = [1.1, 1.1]
         def cov_function(hyperparameters, x, z):
             sigma, l = hyperparameters[0], hyperparameters[1]
             tao = x - z
-            return (sigma**2)*(exp(-dot(tao.T, tao))/2*l*l)
+            return (sigma**2)*exp(-dot(tao.T, tao)/(2*l*l))
         self.cov_function = cov_function
         def compute_pder(hyperparameters, i, x, z):
             sigma, l = hyperparameters[0], hyperparameters[1]
             tao = x - z
             if i==0:
-                return 2*sigma*(exp(-dot(tao.T, tao))/2*l*l)
+                return 2*sigma*exp(-dot(tao.T, tao)/(2*l*l))
             elif i==1:
-                return (1./l**3)*(sigma**2)*(exp(-dot(tao.T, tao))/2*l*l)
+                r_squared = dot(tao.T, tao)
+                return (r_squared/l**3)*(sigma**2)*exp(-r_squared/(2*l*l))
             else:
                 #TODO: controlar error
                 # print 'error'
