@@ -44,9 +44,9 @@ tasks = [0]
 my_GP.hyperparameters = my_GP.gpc_optimize(tasks)[0]
 print my_GP.hyperparameters
 
-y_star = my_GP.gpc_make_prediction([0], Xtest)
-for i in range(len(y_star)):
-    print Ytest[i,0], y_star[i]
+f_star = my_GP.gpc_make_prediction([0], Xtest)
+for i in range(len(f_star)):
+    print Ytest[i,0], 1 if f_star[i]>0.5 else -1
 
 CASE2 = 3
 
@@ -65,9 +65,9 @@ tasks = [0,1]
 my_GP.hyperparameters = my_GP.gpc_optimize(tasks)[0]
 print my_GP.hyperparameters
 
-y_star = my_GP.gpc_make_prediction([0], Xtest)
-for i in range(len(y_star)):
-    print Ytest[i,0], y_star[i]
+f_star = my_GP.gpc_make_prediction([0], Xtest)
+for i in range(len(f_star)):
+    print Ytest[i,0], 1 if f_star[i]>0.5 else -1
 
 CASE3 = 7
 
@@ -87,7 +87,6 @@ tasks = [0,1,2]
 my_GP.hyperparameters = my_GP.gpc_optimize(tasks)[0]
 print my_GP.hyperparameters
 
-y_star = my_GP.gpc_make_prediction([0], Xtest)
-for i in range(len(y_star)):
-    print Ytest[i,0], y_star[i]
-
+f_star = my_GP.gpc_make_prediction([0], Xtest)
+for i in range(len(f_star)):
+    print Ytest[i,0], 1 if f_star[i]>0.5 else -1
