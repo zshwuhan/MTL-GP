@@ -28,15 +28,6 @@ class CovFunction:
 
     def pder_matrix(self, hyperparameters, i, X):
         return compute_pder_matrix(self.compute_pder, hyperparameters, i, X)
-        '''
-        h1 = hyperparameters
-        h2 = hyperparameters
-        h1[coord] += eps
-        h2[coord] -= eps
-        num = self.cov_matrix(h1, X) - self.cov_matrix(h2, X)
-        denom = 2*eps
-        return num/denom
-        '''
 
 class SEKernel(CovFunction):
     def __init__(self):
@@ -349,7 +340,7 @@ class GaussianProcess:
     def gpc_optimize(self, tasks):
         def my_prediction(hyperparameters):
             mlml = self.gpc_find_mode(tasks, hyperparameters)[1]
-            print mlml
+            # print mlml
             return mlml
         def my_grad(hyperparameters):
             grad = self.gpc_gradient_mlogML(hyperparameters, tasks)
