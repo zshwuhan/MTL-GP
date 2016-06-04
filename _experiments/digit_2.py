@@ -37,8 +37,8 @@ Xtest = np.matrix(Xtest)
 Ytest = np.matrix(Ytest).T
 
 
-my_GP = GaussianProcess(SEKernel(), Xtrain, sigmoid_function=LogisticFunction())
-my_GP.add_task(Ytrain)
+my_GP = GaussianProcess(SEKernel(), LogisticFunction())
+my_GP.add_task(Xtrain, Ytrain)
 
 tasks = [0]
 my_GP.hyperparameters = my_GP.gpc_optimize(tasks)[0]
@@ -57,9 +57,9 @@ Ytrain2 = np.concatenate(
 )
 Ytrain2 = np.matrix(Ytrain2).T
 
-my_GP = GaussianProcess(SEKernel(), Xtrain, sigmoid_function=LogisticFunction())
-my_GP.add_task(Ytrain)
-my_GP.add_task(Ytrain2)
+my_GP = GaussianProcess(SEKernel(), LogisticFunction())
+my_GP.add_task(Xtrain, Ytrain)
+my_GP.add_task(Xtrain, Ytrain2)
 
 tasks = [0,1]
 my_GP.hyperparameters = my_GP.gpc_optimize(tasks)[0]
@@ -78,10 +78,10 @@ Ytrain3 = np.concatenate(
 )
 Ytrain3 = np.matrix(Ytrain3).T
 
-my_GP = GaussianProcess(SEKernel(), Xtrain, sigmoid_function=LogisticFunction())
-my_GP.add_task(Ytrain)
-my_GP.add_task(Ytrain2)
-my_GP.add_task(Ytrain3)
+my_GP = GaussianProcess(SEKernel(), LogisticFunction())
+my_GP.add_task(Xtrain, Ytrain)
+my_GP.add_task(Xtrain, Ytrain2)
+my_GP.add_task(Xtrain, Ytrain3)
 
 tasks = [0,1,2]
 my_GP.hyperparameters = my_GP.gpc_optimize(tasks)[0]

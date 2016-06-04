@@ -31,9 +31,9 @@ class CovFunction:
 
 class SEKernel(CovFunction):
     def __init__(self):
-        # self.INITIAL_GUESS = [log(2.6), log(7.0)]
+        self.INITIAL_GUESS = [log(2.6), log(7.0)]
         # self.INITIAL_GUESS = [9.1, 9.1]
-        self.INITIAL_GUESS = [1.1, 1.1]
+        # self.INITIAL_GUESS = [0.1, 0.1]
         def cov_function(hyperparameters, x, z):
             sigma, l = hyperparameters[0], hyperparameters[1]
             tao = x - z
@@ -189,23 +189,26 @@ class LogisticFunction(SigmoidFunction):
         return np.matrix([p[i,0]*(1-p[i,0])*(2*p[i,0]-1) for i in range(n)]).T
 
 class GaussianProcess:
-    def __init__(self, cov_function, X, sigmoid_function=None):
+    def __init__(self, cov_function, sigmoid_function=None):
         self.cov_function = cov_function
-        self.X = X
-        self.n, self.D = num_cols(X), num_rows(X)
+        # self.X = X
+        # self.n, self.D = num_cols(X), num_rows(X)
         self.num_tasks = 0
         self.Y = None
 
         self.hyperparameters =  cov_function.INITIAL_GUESS
-        self.K = cov_function.cov_matrix(self.hyperparameters, X)
+        # self.K = cov_function.cov_matrix(self.hyperparameters, X)
         self.sigmoid = sigmoid_function
         # TODO:
         # Matriz de covarianza
 
-    def add_task(self, y):
+    def add_task(self, X, y):
         if self.num_tasks == 0:
+            self.X = []
+            self.X.append(X)
             self.Y = y
         else:
+            self.X.append(X)
             self.Y = np.concatenate((self.Y, y), axis=1)
         self.num_tasks += 1
 
@@ -263,22 +266,24 @@ class GaussianProcess:
 
     def gpc_find_mode(self, tasks, hyperparameters):
         try:
-            I = np.matrix(np.eye(self.n))
-
             num_tasks = len(tasks)
-            f = np.matrix([0]*self.n*num_tasks).reshape((self.n, num_tasks))
+            # TODO: modificar esta linea (puede fallar)
+            n = num_cols(self.X[0])
+            f = np.matrix([0]*n*num_tasks).reshape((n, num_tasks))
             self.mlog_ML = 0
+            K = [[]]*num_tasks
             for task in range(num_tasks):
+                I = np.matrix(np.eye(n))
                 y = self.Y[:,task]
                 while True:
                     f_old = np.copy(f[:,task])
                     W = -self.sigmoid.hessian_log_likelihood(y, f[:,task])
-                    K = self.cov_function.cov_matrix(hyperparameters, self.X)
+                    K[task] = self.cov_function.cov_matrix(hyperparameters, self.X[task])
                     sqrt_W = np.sqrt(W)
-                    L = cholesky(I + sqrt_W*K*sqrt_W)
+                    L = cholesky(I + sqrt_W*K[task]*sqrt_W)
                     b = W*f[:,task] + self.sigmoid.gradient_log_likelihood(y, f[:,task])
-                    a = b - sqrt_W*backslash(L.T, backslash(L, sqrt_W*K*b))
-                    f[:,task] = K*a
+                    a = b - sqrt_W*backslash(L.T, backslash(L, sqrt_W*K[task]*b))
+                    f[:,task] = K[task]*a
                     if norm(f[:,task]-f_old) < 0.01:
                         break
                 self.mlog_ML += (0.5*dot(a.T, f[:,task]) - self.sigmoid.log_likelihood(y, f[:,task]) + sum(log(np.diag(L))))
@@ -295,16 +300,16 @@ class GaussianProcess:
         gradient = np.array([0.0]*num_hyper)
         for task in range(num_tasks):
             y = self.Y[:,task]
-            self.L = cholesky(I + sqrt_W*K*sqrt_W)
+            self.L = cholesky(I + sqrt_W*K[task]*sqrt_W)
             L = self.L
             R = sqrt_W*backslash(L.T, backslash(L, sqrt_W))
-            C = backslash(L, sqrt_W*K)
-            s2 = np.matrix(np.diag(np.diag(K) - np.diag(C.T*C)))*self.sigmoid.der3_log_likelihood(y, f[:,task])
+            C = backslash(L, sqrt_W*K[task])
+            s2 = np.matrix(np.diag(np.diag(K[task]) - np.diag(C.T*C)))*self.sigmoid.der3_log_likelihood(y, f[:,task])
             for j in range(num_hyper):
-                C = self.cov_function.pder_matrix(hyperparameters, j, self.X)
+                C = self.cov_function.pder_matrix(hyperparameters, j, self.X[task])
                 s1 = 0.5*(a.T*C*a - trace_of_prod(R, C))[0, 0]
                 b = C*self.sigmoid.gradient_log_likelihood(y, f[:,task])
-                s3 = b - K*R*b
+                s3 = b - K[task]*R*b
                 gradient[j] += (-s1 -dot(s2.T,s3))
         return gradient
 
@@ -312,14 +317,18 @@ class GaussianProcess:
         task = tasks[0]
         y, f = self.Y[:,task], self.f
         num_tasks = len(tasks)
-        I = np.matrix(np.eye(self.n))
+        # TODO: Revisar esta linea(puede fallar):
+        I = np.matrix(np.eye(num_cols(self.X[task])))
         W = -self.sigmoid.hessian_log_likelihood(y, f)
-        self.K = self.cov_function.cov_matrix(self.hyperparameters, self.X)
-        K = self.K + eps*I
+        # TODO: Revisar las dos siguientes lineas:
+        # self.K = self.cov_function.cov_matrix(self.hyperparameters, self.X[task])
+        # K = self.K + eps*I
+        K = self.cov_function.cov_matrix(self.hyperparameters, self.X[task])
+        K = K + eps*I
         sqrt_W = np.sqrt(W)
         self.L = cholesky(I + sqrt_W*K*sqrt_W)
         L = self.L
-        k_star = compute_k_star(self.cov_function.cov_function, self.hyperparameters, self.X, x_star)
+        k_star = compute_k_star(self.cov_function.cov_function, self.hyperparameters, self.X[task], x_star)
         # f_mean = dot(k_star.T, self.sigmoid.gradient_log_likelihood(y, f))
         f_mean = (k_star.T)*(self.sigmoid.gradient_log_likelihood(y, f))
         v = backslash(L, sqrt_W*k_star)
@@ -336,11 +345,14 @@ class GaussianProcess:
         for i in range(num_cols(x_star)):
             self.pi_star.append(integrate(aux_fun, -np.inf, np.inf, args=(i,))[0])
         return self.pi_star
+        """def aux_fun(f_i):
+            return 1 if f_i >= 0.5 else -1
+        return map(aux_fun, f_mean)"""
 
     def gpc_optimize(self, tasks):
         def my_prediction(hyperparameters):
             mlml = self.gpc_find_mode(tasks, hyperparameters)[1]
-            # print mlml
+            print mlml
             return mlml
         def my_grad(hyperparameters):
             grad = self.gpc_gradient_mlogML(hyperparameters, tasks)
